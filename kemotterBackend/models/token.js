@@ -22,7 +22,14 @@ module.exports = (sequelize, DataTypes) => {
     underscored: true,
   });
   Token.associate = function(models) {
-    // associations can be defined here
+    models.Token.belongsTo(models.ClientService,{
+      foreignKey: 'service_id',
+      targetKey : 'id'
+    });
+    models.Token.belongsTo(models.Account,{
+      foreignKey: 'account_id',
+      targetKey : 'id'
+    });
   };
   return Token;
 };

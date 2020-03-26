@@ -43,7 +43,12 @@ module.exports = (sequelize, DataTypes) => {
     underscored: true,
   });
   Account.associate = function(models) {
-    // associations can be defined here
+    models.Account.hasMany(models.ClientService,{
+      foreignKey: "auther_id"
+    });
+    models.Account.hasMany(models.Token,{
+      foreignKey: "account_id"
+    });
   };
   return Account;
 };
