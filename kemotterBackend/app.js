@@ -1,8 +1,12 @@
 var express = require('express');
+const bodyParser = require('body-parser') // POST用parser
 var app = express();
 var http = require('http').Server(app);
 const PORT = process.env.PORT || 7000;
-const models = require('./models')
+const models = require('./models');
+const _ = require('lodash');
+
+app.use(bodyParser.urlencoded({ extended: true })) // for parsing application/x-www-form-urlencoded
 
 const reserror = (res,str='Bad Request',code=500)=>res.status(code).send(str)
 
