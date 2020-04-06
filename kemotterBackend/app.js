@@ -14,6 +14,31 @@ app.get('/', function (req, res) {
   res.sendFile(__dirname + '/index.html');
 });
 
+
+
+
+
+
+//==========================
+// ! Authorization
+//==========================
+
+const Auth = async (accessToken) => {
+  if (typeof accessToken !== 'string'){
+    throw Error('accessToken is not string.');
+  }else{
+    const token = await models.Token.findOne({
+      where: {
+        access_token: accessToken
+      },
+      include: [{
+        model: models.Account,
+        required: true
+      }]
+    }).catch(error=>console.error(error));
+    return token;
+  }
+}
 app.get('/account',async (req, res)=>{
   const param = req.query;
   const header = req.get('Authorization');
