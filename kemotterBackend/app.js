@@ -74,6 +74,43 @@ app.get('/account',async (req, res)=>{
   }
 });
 
+//* POST
+app.post('/account', async (req, res)=>{
+  res.setHeader('Content-Type', 'text/plain');
+  const body = req.body;
+  const bearer = req.get('Authorization');
+  if(!(/^Bearer .*$/g.test(bearer))){
+    reserror(res, 'Unauthorized',401);
+  }else{
+    const accessToken = bearer.slice(7);
+    const auth = await Auth(accessToken);
+    if (auth == null){
+      reserror(res, 'Unauthorized', 401);
+    }else{
+      const blueprint = {
+        name: body.name,
+        display_name: body.display_name,
+        profile: body.profile,
+        location: body.location,
+        webaddress: body.webaddress,
+        birthday: body.birthday,
+        json: body.json
+      }
+      const filtered = _.pickBy(blueprint, (value, key) => value != undefined);
+      console.log(filtered);
+      const account = await models.Account.update(filtered,{
+        where: {
+          id: auth.Account.id
+        }
+      }).catch(x=>{
+        console.error(x);
+        reserror(res, 'unknown error. check the request.', 400);
+      });
+      res.send(account);
+    }
+  }
+});
+
 http.listen(PORT, function () {
   console.log('server listening. Port:' + PORT);
 });
