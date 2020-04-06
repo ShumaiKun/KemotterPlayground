@@ -39,6 +39,16 @@ const Auth = async (accessToken) => {
     return token;
   }
 }
+
+
+
+
+
+//==========================
+// ? Account API 
+//==========================
+
+//* GET
 app.get('/account',async (req, res)=>{
   const param = req.query;
   const header = req.get('Authorization');
