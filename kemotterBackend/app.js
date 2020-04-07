@@ -87,16 +87,17 @@ app.post('/account', async (req, res)=>{
     if (auth == null){
       reserror(res, 'Unauthorized', 401);
     }else{
+      console.log(body)
       const blueprint = {
         name: body.name,
-        display_name: body.display_name,
-        profile: body.profile,
-        location: body.location,
-        webaddress: body.webaddress,
-        birthday: body.birthday,
-        json: body.json
+        display_name: body.displayName,
+        profile: body.profile == "" ? null : body.profile,
+        location: body.location == "" ? null : body.location,
+        webaddress: body.webaddress == "" ? null : body.webaddress,
+        birthday: body.birthday == "" ? null : body.birthday,
+        json: body.json  == "" ? null : body.json
       }
-      const filtered = _.pickBy(blueprint, (value, key) => value != undefined);
+      const filtered = _.pickBy(blueprint, (value, key) => value !== undefined);
       console.log(filtered);
       const account = await models.Account.update(filtered,{
         where: {
