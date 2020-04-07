@@ -112,6 +112,41 @@ app.post('/account', async (req, res)=>{
   }
 });
 
+
+
+
+
+
+//==========================
+// ? Follow - Following 
+//==========================
+
+//* GET
+app.get('/follow',async (req, res)=>{
+  const param = req.query;
+  res.send('ok');
+});
+
+//* POST
+app.post('/follow',async (req, res)=>{
+  const body = req.body;
+  const bearer = req.get('Authorization');
+  if(!(/^Bearer .*$/g.test(bearer))){
+    reserror(res, 'Unauthorized',401);
+  }else{
+    const accessToken = bearer.slice(7);
+    const auth = await Auth(accessToken);
+    if (auth == null){
+      reserror(res, 'Unauthorized', 401);
+    }else{
+      // code here...
+      res.send('ok');
+    }
+  }
+});
+
+
+
 http.listen(PORT, function () {
   console.log('server listening. Port:' + PORT);
 });
