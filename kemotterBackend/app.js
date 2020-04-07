@@ -139,8 +139,56 @@ app.post('/follow',async (req, res)=>{
     if (auth == null){
       reserror(res, 'Unauthorized', 401);
     }else{
-      // code here...
-      res.send('ok');
+      const account = await models.Account.findByPk(body.to);
+      if (account.protect){
+        const { count } = await models.Follow.findAndCountAll({
+          where: {
+            who: auth.Account.id,
+            to: body.to,
+            confirmed: true
+          }
+        });
+        if (count === 0){
+          const [follow, created] = await models.Follow.findOrCreate({
+            where: {
+              who: auth.Account.id, 
+              to: body.to,
+              confirmed: false
+            }
+          });
+          if (created){
+            res.send('Your follow action is sent. ( unconfirmed )');
+          }else{
+            reserror(res, 'already exists.', 400);
+          }
+        }else{
+          res.error(res, 'already confirmed.', 409);// 409 - conflict
+        }
+      }else{
+        const { count } = await models.Follow.findAndCountAll({
+          where: {
+            who: auth.Account.id,
+            to: body.to,
+            confirmed: false
+          }
+        });
+        if (count === 0){
+          const [follow, created] = await models.Follow.findOrCreate({
+            where: {
+              who: auth.Account.id, 
+              to: body.to,
+              confirmed: true
+            }
+          });
+          if (created){
+            res.send('Your follow action is sent. ( confirmed )');
+          }else{
+            reserror(res, 'already exists.', 400);
+          }
+        }else{
+          res.error(res, 'There is an already unconfirmed follow request.', 409);// 409 - conflict
+        }
+      }
     }
   }
 });
