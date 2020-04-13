@@ -226,6 +226,35 @@ app.post('/follow',async (req, res)=>{
   }
 });
 
+//* DELETE
+app.delete('/follow',(req,res)=>reserror(res, 'Not Found.', 404))
+app.delete('/follow/:id', async function (req, res) {
+  const param = req.params;
+  if (param.id == undefined){
+    reserror(res, 'id is undefined.');
+  }else{
+    const bearer = req.get('Authorization');
+    if(!(/^Bearer .*$/g.test(bearer))){
+      reserror(res, 'Unauthorized',401);
+    }else{
+      const accessToken = bearer.slice(7);
+      const auth = await Auth(accessToken).catch(e=>unknownerror(res,e));
+      if (auth == null){
+        reserror(res, 'Unauthorized', 401);
+      }else{
+        const follow = await models.Follow.destroy({
+          where:{
+            who: auth.Account.id,
+            to: param.id
+          }
+        }).catch(e=>unknownerror(res,e));
+        res.send(String(follow));
+      }
+    }
+  }
+});
+
+
 
 
 http.listen(PORT, function () {
