@@ -16,7 +16,10 @@ app.get('/', function (req, res) {
 
 
 
-
+const unknownerror = (res,x) => {
+  console.error(x);
+  reserror(res, 'unknown error. check the request.', 400);
+}
 
 
 //==========================
@@ -61,10 +64,7 @@ app.get('/account',async (req, res)=>{
     }else{
       console.log(id);
       const result = await models.Account.findByPk(id)
-        .catch(e=>{
-          console.log(e);
-          reserror(res, 'unknown error. check the request.',400);
-        });
+        .catch(e=>unknownerror(res,e));
       if (result == null){
         reserror(res,'Data Not Found.',400);
       }else{
@@ -97,16 +97,13 @@ app.post('/account', async (req, res)=>{
         birthday: body.birthday == "" ? null : body.birthday,
         json: body.json  == "" ? null : body.json
       }
-      const filtered = _.pickBy(blueprint, (value, key) => value !== undefined);
+      const filtered = _.pickBy(blueprint, (value, key) => value !== undefined).catch(e=>unknownerror(res,e));
       console.log(filtered);
       const account = await models.Account.update(filtered,{
         where: {
           id: auth.Account.id
         }
-      }).catch(x=>{
-        console.error(x);
-        reserror(res, 'unknown error. check the request.', 400);
-      });
+      }).catch(e=>unknownerror(res,e));
       res.send(account);
     }
   }
