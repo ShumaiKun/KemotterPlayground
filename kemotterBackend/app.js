@@ -121,7 +121,35 @@ app.post('/account', async (req, res)=>{
 //* GET
 app.get('/follow',async (req, res)=>{
   const param = req.query;
-  res.send('ok');
+  if (param.id == undefined){
+    reserror(res, 'id is undefined.');
+  }else{
+    const followings = await models.Follow.findAll({
+      where: {
+        who: param.id
+      },
+      include: [{
+        model: models.Account,
+        required: true,
+        as: 'following'
+      }]
+    }).catch(e=>unknownerror(res,e));
+    const followers = await models.Follow.findAll({
+      where: {
+        to: param.id
+      },
+      include: [{
+        model: models.Account,
+        required: true,
+        as: 'follower'
+      }]
+    }).catch(e=>unknownerror(res,e));
+    const result = {
+      followings,
+      followers
+    }
+    res.send(result);
+  }
 });
 
 //* POST
