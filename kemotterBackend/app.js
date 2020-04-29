@@ -382,7 +382,6 @@ const FollowAPI = (app) => {
   });
 }
 
-// 2020 3 24 ここまで
 
 //* DELETE
 app.delete('/follow', (req, res) => responseStatusCode(res, 'Not Found.', 404));
