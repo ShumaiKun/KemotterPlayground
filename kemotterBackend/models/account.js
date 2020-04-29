@@ -20,6 +20,9 @@ module.exports = (sequelize, DataTypes) => {
         len: [0, 500]
       }
     },
+    protect: {
+      type: DataTypes.BOOLEAN,
+    },
     location: {
       type: DataTypes.STRING,
       validate: {

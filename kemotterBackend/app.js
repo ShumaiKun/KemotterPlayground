@@ -5,20 +5,59 @@ var http = require('http').Server(app);
 const PORT = process.env.PORT || 7000;
 const models = require('./models');
 const _ = require('lodash');
+const errors = require('./errors.js');
+const statusMessages = require('./statusmessages.js');
+
 
 app.use(bodyParser.urlencoded({ extended: true })) // for parsing application/x-www-form-urlencoded
 
-const reserror = (res,str='Bad Request',code=500)=>res.status(code).send(str)
 
-app.get('/', function (req, res) {
+/**
+ * 
+ * @param {Object} res Expressのresオブジェクト
+ * @param {String} str 返すエラーの名前
+ * @param {Number} code ステータスコード
+ */
+const responseStatusCode = (res, str = 'Bad Request', code = 500) => {
+  res.status(code).json({
+    result: null,
+    error: str,
+    errorCode: code
+  });
+  throw new Error('responsed');
+}
+
+/**
+ * ルートフォルダにアクセスされた際にindex.htmlを返す
+ */
+app.get('/', (req, res) => {
   res.sendFile(__dirname + '/index.html');
 });
 
 
+/**
+ * クエリエラーなどの特定不能なエラーを返す
+ * (responseStatusCodeのラッパー)
+ * @param {Object} res Expressのresオブジェクト
+ * @param {Error} e
+ */
+const responseStatusOfUnknownError = (res, e = undefined) => {
+  responseStatusCode(res, 'unknown error. check the request.', 400);
+}
 
-const unknownerror = (res,x) => {
-  console.error(x);
-  reserror(res, 'unknown error. check the request.', 400);
+
+
+/**
+ * クライアントに正常に動作が完了したとしてJSONを返す
+ * @param {Object} res Expressのresオブジェクト
+ * @param {Object} result 返すJSON
+ */
+const responseSuccessfully = (res, result) => {
+  res.status(200).json({
+    result,
+    error: null,
+    errorCode: null
+  });
 }
 
 
@@ -26,10 +65,14 @@ const unknownerror = (res,x) => {
 // ! Authorization
 //==========================
 
-const Auth = async (accessToken) => {
-  if (typeof accessToken !== 'string'){
-    throw Error('accessToken is not string.');
-  }else{
+/**
+ * トークンモデルを返す
+ * @param {String} accessToken 認証したいアカウントのアクセストークン
+ */
+const getTokenThroughAuth = async (accessToken) => {
+  if (typeof accessToken !== 'string') {
+    throw errors.accessTokenIsNotString;
+  } else {
     const token = await models.Token.findOne({
       where: {
         access_token: accessToken
@@ -38,56 +81,108 @@ const Auth = async (accessToken) => {
         model: models.Account,
         required: true
       }]
-    }).catch(error=>console.error(error));
+    }).catch(error => {
+      throw errors.accessTokenIsInvalid;
+    });
     return token;
+  }
+}
+
+/**
+ * ヘッダーのBearerで認証する
+ * 注意！この関数にcatchはつけないで！二重になります。
+ * @param {Object} res Expressのresオブジェクト
+ * @param {Object} req Expressのreqオブジェクト
+ */
+const getAccountFromRequestHeader = async (res, req) => {
+  try {
+
+    const bearer = req.get('Authorization');
+    if (!(/^Bearer .*$/g.test(bearer))) {
+      // Authorizationが規則に則っていない場合
+      responseStatusCode(res, statusMessages.Unauthorized, 401);
+    } else {
+
+      const accessToken = bearer.slice(7);
+
+      const token = await getTokenThroughAuth(accessToken)
+        .catch(error => {
+          if (error == errors.accessTokenIsNotString) {
+            responseStatusCode(res, errors.accessTokenIsNotString.message, 400);
+          } else {
+            responseStatusOfUnknownError(res, error);
+          }
+        });
+
+      if (token == null) {
+        responseStatusCode(res, statusMessages.isInvalid("accesstoken"), 401);
+      } else {
+
+        const account = await token.getAccount()
+          .catch((e) => responseStatusOfUnknownError(res, e));
+
+        if (!account) {
+          responseStatusOfUnknownError(res);
+        } else {
+          return account;
+        }
+      }
+    }
+  } catch (e) {
+    console.error(e);
   }
 }
 
 
 
+/**
+ * AccountAPI
+ */
+const AccountAPI = (app) => {
 
+  /**
+   * Account API (GET)
+   */
+  app.get('/account', async (req, res) => {
+    try {
 
-//==========================
-// ? Account API 
-//==========================
+      const param = req.query;
 
-//* GET
-app.get('/account',async (req, res)=>{
-  const param = req.query;
-  const header = req.get('Authorization');
-  if(param.id == undefined || param.id == ''){
-    reserror(res, `Bad parameter 'id'(${param.id}).`, 400);
-  }else{
-    const id = parseInt(param.id,10);
-    if (isNaN(id) || id == undefined || id == null){
-      reserror(res, `Bad parameter 'id'(${param.id}).`,400);
-    }else{
-      console.log(id);
-      const result = await models.Account.findByPk(id)
-        .catch(e=>unknownerror(res,e));
-      if (result == null){
-        reserror(res,'Data Not Found.',400);
-      }else{
-        res.send(result);
+      if (param.id == undefined || param.id == '') {
+        responseStatusCode(res, statusMessages.badParameter("id", param.id), 400);
+      } else {
+
+        const id = parseInt(param.id, 10);
+        if (isNaN(id) || id == undefined || id == null) {
+          responseStatusCode(res, statusMessages.badParameter("id", param.id), 400);
+        } else {
+
+          console.log(id);
+          const result = await models.Account.findByPk(id)
+            .catch((e) => responseStatusOfUnknownError(res, e));
+
+          if (result == null) {
+            responseStatusCode(res, statusMessages.dataNotFound, 400);
+          } else {
+            responseSuccessfully(res, result);
+          }
+
+        }
       }
+    } catch (e) {
+      console.log('catched');
     }
-  }
-});
+  });
 
-//* POST
-app.post('/account', async (req, res)=>{
-  res.setHeader('Content-Type', 'text/plain');
-  const body = req.body;
-  const bearer = req.get('Authorization');
-  if(!(/^Bearer .*$/g.test(bearer))){
-    reserror(res, 'Unauthorized',401);
-  }else{
-    const accessToken = bearer.slice(7);
-    const auth = await Auth(accessToken);
-    if (auth == null){
-      reserror(res, 'Unauthorized', 401);
-    }else{
-      console.log(body)
+  /**
+   * Account API (POST)
+   */
+  app.post('/account', async (req, res) => {
+    try {
+
+      const body = req.body;
+      const author = await getAccountFromRequestHeader(res, req);
+
       const blueprint = {
         name: body.name,
         display_name: body.displayName,
@@ -95,168 +190,207 @@ app.post('/account', async (req, res)=>{
         location: body.location == "" ? null : body.location,
         webaddress: body.webaddress == "" ? null : body.webaddress,
         birthday: body.birthday == "" ? null : body.birthday,
-        json: body.json  == "" ? null : body.json
+        json: body.json == "" ? null : body.json
       }
-      const filtered = _.pickBy(blueprint, (value, key) => value !== undefined).catch(e=>unknownerror(res,e));
-      console.log(filtered);
-      const account = await models.Account.update(filtered,{
+
+      const filtered = _.pickBy(blueprint,
+        (value, key) => value !== undefined
+      );
+
+      const account = await models.Account.update(filtered, {
         where: {
-          id: auth.Account.id
+          id: author.id
         }
-      }).catch(e=>unknownerror(res,e));
-      res.send(account);
+      }).catch(e => responseStatusOfUnknownError(res, e));
+
+      responseSuccessfully(res, { account });
+    } catch (e) {
+      console.log('catched');
+      console.error(e)
     }
-  }
-});
+  });
+
+}
 
 
 
 
 
 
-//==========================
-// ? Follow - Following 
-//==========================
 
-//* GET
-app.get('/follow',async (req, res)=>{
-  const param = req.query;
-  if (param.id == undefined){
-    reserror(res, 'id is undefined.');
-  }else{
-    const followings = await models.Follow.findAll({
-      where: {
-        who: param.id
-      },
-      include: [{
-        model: models.Account,
-        required: true,
-        as: 'following'
-      }]
-    }).catch(e=>unknownerror(res,e));
-    const followers = await models.Follow.findAll({
-      where: {
-        to: param.id
-      },
-      include: [{
-        model: models.Account,
-        required: true,
-        as: 'follower'
-      }]
-    }).catch(e=>unknownerror(res,e));
-    const result = {
-      followings,
-      followers
+/**
+ * Follow API
+ * @param {Object} app 
+ */
+const FollowAPI = (app) => {
+
+  /**
+   * Follow API (GET)
+   */
+  app.get('/follow', async (req, res) => {
+    try {
+      const param = req.query;
+      if (param.id == undefined) {
+        responseStatusCode(res, statusMessages.badParameter('id', param.id));
+      } else {
+
+        const { count } = await models.Account.findAndCountAll({
+          where: {
+            id: param.id
+          }
+        }).catch((e) => responseStatusOfUnknownError(res, e));
+
+        if (count === 0) {
+          responseStatusCode(res, statusMessages.badParameter('id', param.id));
+        }
+
+        const followings = await models.Follow.findAll({
+          where: {
+            who: param.id
+          },
+          include: [{
+            model: models.Account,
+            required: true,
+            as: 'following'
+          }]
+        }).catch((e) => responseStatusOfUnknownError(res, e));
+
+        const followers = await models.Follow.findAll({
+          where: {
+            to: param.id
+          },
+          include: [{
+            model: models.Account,
+            required: true,
+            as: 'follower'
+          }]
+        }).catch((e) => responseStatusOfUnknownError(res, e));
+
+        const result = {
+          followings,
+          followers
+        }
+        responseSuccessfully(res, result);
+      }
+    } catch (e) {
+      console.log('catched.');
     }
-    res.send(result);
-  }
-});
+  });
 
-//* POST
-app.post('/follow',async (req, res)=>{
-  const body = req.body;
-  const bearer = req.get('Authorization');
-  if(!(/^Bearer .*$/g.test(bearer))){
-    reserror(res, 'Unauthorized',401);
-  }else{
-    const accessToken = bearer.slice(7);
-    const auth = await Auth(accessToken);
-    if (auth == null){
-      reserror(res, 'Unauthorized', 401);
-    }else{
-      if (auth.Account.id == body.to){
-        reserror(res, 'You cannot follow you. Let us make some friends.', 418);
-      }else{
-        const account = await models.Account.findByPk(body.to).catch(e=>unknownerror(res,e));
-        if (account === null){
-          reserror(res, 'Account Not Found. fix \'to\'.');
-        }else{
-          if (account !== null &&account.protect){
-            const { count } = await models.Follow.findAndCountAll({
-              where: {
-                who: auth.Account.id,
-                to: body.to,
-                confirmed: true
-              }
-            }).catch(e=>unknownerror(res,e));
-            if (count === 0){
-              const [follow, created] = await models.Follow.findOrCreate({
+
+  /**
+   * Follow API (POST)
+   */
+  app.post('/follow', async (req, res) => {
+    try {
+      const body = req.body;
+      const author = await getAccountFromRequestHeader(res, req);
+
+      if (!author) {
+        responseStatusCode(res, statusMessages.Unauthorized, 401);
+      } else {
+        if (author.id == body.to) {
+          responseStatusCode(res, 'You cannot follow you,Botti. Make Friends.', 418);
+        } else {
+
+          const account = await models.Account.findByPk(body.to).catch(() => responseStatusOfUnknownError(res));
+          if (!account) {
+            responseStatusCode(res, 'Account Not Found. fix \'to\'.', 400);
+          } else {
+
+            if (account.protect) {
+              const { count } = await models.Follow.findAndCountAll({
                 where: {
-                  who: auth.Account.id, 
-                  to: body.to,
-                  confirmed: false
-                }
-              }).catch(e=>unknownerror(res,e));
-              if (created){
-                res.send('Your follow action is sent. ( unconfirmed )');
-              }else{
-                reserror(res, 'already exists.', 400);
-              }
-            }else{
-              res.error(res, 'already confirmed.', 409);// 409 - conflict
-            }
-          }else{
-            const { count } = await models.Follow.findAndCountAll({
-              where: {
-                who: auth.Account.id,
-                to: body.to,
-                confirmed: false
-              }
-            }).catch(e=>unknownerror(res,e));
-            if (count === 0){
-              const [follow, created] = await models.Follow.findOrCreate({
-                where: {
-                  who: auth.Account.id, 
+                  who: author.id,
                   to: body.to,
                   confirmed: true
                 }
-              }).catch(e=>unknownerror(res,e));
-              if (created){
-                res.send('Your follow action is sent. ( confirmed )');
-              }else{
-                reserror(res, 'already exists.', 400);
+              }).catch((e) => responseStatusOfUnknownError(res, e));
+
+              if (count === 0) {
+                const [follow, created] = await models.Follow.findOrCreate({
+                  where: {
+                    who: author.id,
+                    to: body.to,
+                    confirmed: false
+                  }
+                }).catch(e => responseStatusOfUnknownError(res, e));
+                if (created) {
+                  responseSuccessfully(res, 'Your follow action is sent. ( unconfirmed )');
+                } else {
+                  responseStatusCode(res, 'already exists.', 400);
+                }
+              } else {
+                responseStatusCode(res, 'already confirmed.', 409);// 409 - conflict
               }
-            }else{
-              res.error(res, 'There is an already unconfirmed follow request.', 409);// 409 - conflict
+            } else {
+              const { count } = await models.Follow.findAndCountAll({
+                where: {
+                  who: author.id,
+                  to: body.to,
+                  confirmed: false
+                }
+              }).catch((e) => responseStatusOfUnknownError(res, e));
+              if (count === 0) {
+                const [follow, created] = await models.Follow.findOrCreate({
+                  where: {
+                    who: author.id,
+                    to: body.to,
+                    confirmed: true
+                  }
+                }).catch((e) => responseStatusOfUnknownError(res, e));
+                if (created) {
+                  responseSuccessfully(res, 'Your follow action is sent. ( confirmed )');
+                } else {
+                  responseStatusCode(res, 'already exists.', 400);
+                }
+              } else {
+                responseStatusCode(res, 'There is an already unconfirmed follow request.', 409);// 409 - conflict
+              }
             }
           }
         }
       }
+    } catch (e) {
+      console.error(e);
     }
-  }
-});
+  });
+
+
+  app.delete('/follow/:id', async function (req, res) {
+    try {
+      const param = req.params;
+      if (!param.id) {
+        responseStatusCode(res, statusMessages.isUndefined("id"), 400);
+      } else {
+        const author = await getAccountFromRequestHeader(res, req);
+        if (!author) {
+          responseStatusCode(res, statusMessages.Unauthorized, 401);
+        } else {
+          const follow = await models.Follow.destroy({
+            where: {
+              who: author.id,
+              to: param.id
+            }
+          }).catch((e) => responseStatusOfUnknownError(res, e));
+          responseSuccessfully(res, follow);
+        }
+      }
+    } catch (e) {
+      console.log('catched');
+    }
+  });
+}
+
+// 2020 3 24 ここまで
 
 //* DELETE
-app.delete('/follow',(req,res)=>reserror(res, 'Not Found.', 404))
-app.delete('/follow/:id', async function (req, res) {
-  const param = req.params;
-  if (param.id == undefined){
-    reserror(res, 'id is undefined.');
-  }else{
-    const bearer = req.get('Authorization');
-    if(!(/^Bearer .*$/g.test(bearer))){
-      reserror(res, 'Unauthorized',401);
-    }else{
-      const accessToken = bearer.slice(7);
-      const auth = await Auth(accessToken).catch(e=>unknownerror(res,e));
-      if (auth == null){
-        reserror(res, 'Unauthorized', 401);
-      }else{
-        const follow = await models.Follow.destroy({
-          where:{
-            who: auth.Account.id,
-            to: param.id
-          }
-        }).catch(e=>unknownerror(res,e));
-        res.send(String(follow));
-      }
-    }
-  }
-});
+app.delete('/follow', (req, res) => responseStatusCode(res, 'Not Found.', 404));
+
+AccountAPI(app);
+FollowAPI(app);
 
 
-
-
-http.listen(PORT, function () {
+http.listen(PORT, () => {
   console.log('server listening. Port:' + PORT);
 });
