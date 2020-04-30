@@ -416,10 +416,10 @@ const FollowAPI = (app) => {
 //* DELETE
 app.delete('/follow', (req, res) => responseStatusCode(res, 'Not Found.', 404));
 
-  AccountAPI(app);
-  FollowAPI(app);
+AccountAPI(app);
+FollowAPI(app);
 
 
-  http.listen(PORT, () => {
-    console.log('server listening. Port:' + PORT);
-  });
+http.listen(PORT, () => {
+  console.log('server listening. Port:' + PORT);
+});
