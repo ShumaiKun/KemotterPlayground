@@ -20,6 +20,9 @@ module.exports = (sequelize, DataTypes) => {
         len: [0, 500]
       }
     },
+    protect: {
+      type: DataTypes.BOOLEAN,
+    },
     location: {
       type: DataTypes.STRING,
       validate: {
@@ -48,6 +51,14 @@ module.exports = (sequelize, DataTypes) => {
     });
     models.Account.hasMany(models.Token,{
       foreignKey: "account_id"
+    });
+    models.Account.hasMany(models.Follow,{
+      as: "followings",
+      foreignKey: "who"
+    });
+    models.Account.hasMany(models.Follow,{
+      as: 'followers',
+      foreignKey: "to"
     });
   };
   return Account;
