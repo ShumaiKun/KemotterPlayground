@@ -7,6 +7,7 @@ const models = require('./models');
 const _ = require('lodash');
 const errors = require('./errors.js');
 const statusMessages = require('./statusmessages.js');
+const { Op } = require("sequelize");
 
 
 app.use(bodyParser.urlencoded({ extended: true })) // for parsing application/x-www-form-urlencoded
@@ -42,6 +43,7 @@ app.get('/', (req, res) => {
  * @param {Error} e
  */
 const responseStatusOfUnknownError = (res, e = undefined) => {
+  console.error(e);
   responseStatusCode(res, 'unknown error. check the request.', 400);
 }
 
@@ -416,8 +418,81 @@ const FollowAPI = (app) => {
 //* DELETE
 app.delete('/follow', (req, res) => responseStatusCode(res, 'Not Found.', 404));
 
+
+
+/**
+ * StatusAPI
+ */
+const StatusAPI = (app) => {
+
+  /**
+   * Status API (GET)
+   */
+  app.get('/status', async (req, res) => {
+    try {
+
+      const param = req.query;
+
+      if (param.id == undefined || param.id == '') {
+        if (!param.whose) {
+          responseStatusCode(res, statusMessages.badParameter("id", param.id), 400);
+        } else {
+          const whose = parseInt(param.whose, 10);
+          if (isNaN(whose) || whose == undefined || whose == null) {
+            responseStatusCode(res, statusMessages.badParameter("whose", param.whose), 400);
+          } else {
+            const from = param.from ? parseInt(param.from, 10) : null
+            const where = from ? {whose, id: {[Op.gte]: from}} : {whose}
+            const { count, rows } = await models.Status.findAndCountAll({
+              order: [
+                ['id', 'DESC']
+              ],
+              where,
+              include: {
+                model: models.Account
+              },
+              limit: param.limit ? parseInt(param.limit, 10) : null,
+              offset: param.offset ? parseInt(param.offset, 10) : null
+            });
+            if(!rows){
+              responseStatusCode(res, statusMessages.dataNotFound, 404);
+            }else{
+              responseSuccessfully(res, {status:rows, count});
+            }
+          }
+        }
+      } else {
+
+        const id = parseInt(param.id, 10);
+        if (isNaN(id) || id == undefined || id == null) {
+          responseStatusCode(res, statusMessages.badParameter("id", param.id), 400);
+        } else {
+
+          console.log(id);
+          const status = await models.Status.findOne({
+            where: {id},
+            include: {
+              model: models.Account
+            },
+          }).catch((e) => responseStatusOfUnknownError(res, e));
+
+          if(!status){
+            responseStatusCode(res, statusMessages.dataNotFound, 404)
+          }else{
+            responseSuccessfully(res, {status});
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e)
+      console.log('catched.');
+    }
+  });
+}
+
 AccountAPI(app);
 FollowAPI(app);
+StatusAPI(app);
 
 
 http.listen(PORT, () => {
