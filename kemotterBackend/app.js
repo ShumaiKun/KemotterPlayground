@@ -357,6 +357,9 @@ const FollowAPI = (app) => {
   });
 
 
+  /**
+   * Follow API (DELETE)
+   */
   app.delete('/follow/:id', async function (req, res) {
     try {
       const param = req.params;
@@ -380,16 +383,43 @@ const FollowAPI = (app) => {
       console.log('catched');
     }
   });
+
+  /**
+   * Follow Confirm API (POST)
+   */
+  app.post('/followconfirm', async (req, res) => {
+    try {
+      const body = req.body;
+      const author = await getAccountFromRequestHeader(res, req);
+
+      if (!author) {
+        responseStatusCode(res, statusMessages.Unauthorized, 401);
+      } else {
+        if (!body.id) {
+          responseStatusCode(res, statusMessages.badParameter('id', body.id));
+        } else {
+          const follow = await models.Follow.update({ confirmed: body.confirm }, {
+            where: {
+              who: body.id
+            }
+          }).catch(e => responseStatusOfUnknownError(res, e));
+          responseSuccessfully(res, follow);
+        }
+      }
+    } catch (e) {
+      console.log('cathed');
+    }
+  });
 }
 
 
 //* DELETE
 app.delete('/follow', (req, res) => responseStatusCode(res, 'Not Found.', 404));
 
-AccountAPI(app);
-FollowAPI(app);
+  AccountAPI(app);
+  FollowAPI(app);
 
 
-http.listen(PORT, () => {
-  console.log('server listening. Port:' + PORT);
-});
+  http.listen(PORT, () => {
+    console.log('server listening. Port:' + PORT);
+  });
