@@ -488,6 +488,33 @@ const StatusAPI = (app) => {
       console.log('catched.');
     }
   });
+
+  /**
+   * Status API (POST)
+   */
+  app.post('/status', async (req, res) => {
+    try {
+      const body = req.body;
+      const author = await getAccountFromRequestHeader(res, req);
+      if (body.reply && body.boost){
+        responseStatusCode(res, statusMessages.isInvalid('boost and reply'), 400);
+      }else{
+        if(body.text == "" || /^\s+$/g.test(body.text)){
+          responseStatusCode(res, statusMessages.isInvalid('text'), 400);
+        }else{
+          const result = await models.Status.create({
+            whose: author.id,
+            text: body.text,
+            reply: body.reply ? body.reply : null,
+            boost: body.boost ? body.boost : null
+          }).catch(e => responseStatusOfUnknownError(res, e));
+          responseSuccessfully(res, result);
+        }
+      }
+    } catch (e) {
+      console.log('catched.');
+    }
+  });
 }
 
 AccountAPI(app);
