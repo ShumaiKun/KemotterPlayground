@@ -4,7 +4,6 @@ module.exports = (sequelize, DataTypes) => {
     who: DataTypes.INTEGER,
     to: DataTypes.INTEGER
   }, {
-    underscored: true,
   });
   Like.associate = function(models) {
     models.Like.belongsTo(models.Status,{

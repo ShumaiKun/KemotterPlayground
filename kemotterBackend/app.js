@@ -433,59 +433,69 @@ const StatusAPI = (app) => {
 
       const param = req.query;
 
-      if (param.id == undefined || param.id == '') {
-        if (!param.whose) {
-          responseStatusCode(res, statusMessages.badParameter("id", param.id), 400);
-        } else {
-          const whose = parseInt(param.whose, 10);
-          if (isNaN(whose) || whose == undefined || whose == null) {
-            responseStatusCode(res, statusMessages.badParameter("whose", param.whose), 400);
-          } else {
-            const from = param.from ? parseInt(param.from, 10) : null
-            const where = from ? {whose, id: {[Op.gte]: from}} : {whose}
-            const { count, rows } = await models.Status.findAndCountAll({
-              order: [
-                ['id', 'DESC']
-              ],
-              where,
-              include: {
-                model: models.Account
-              },
-              limit: param.limit ? parseInt(param.limit, 10) : null,
-              offset: param.offset ? parseInt(param.offset, 10) : null
-            });
-            if(!rows){
-              responseStatusCode(res, statusMessages.dataNotFound, 404);
-            }else{
-              responseSuccessfully(res, {status:rows, count});
-            }
-          }
-        }
-      } else {
+      if (!param.id) {
+        responseStatusCode(res, statusMessages.isUndefined('id'));
+      }else{
 
         const id = parseInt(param.id, 10);
-        if (isNaN(id) || id == undefined || id == null) {
-          responseStatusCode(res, statusMessages.badParameter("id", param.id), 400);
-        } else {
+        if (isNaN(id)){
+          responseStatusCode(res, statusMessages.isInvalid('id'));
+        }else{
 
-          console.log(id);
-          const status = await models.Status.findOne({
+          const status_current = await models.Status.findOne({
             where: {id},
             include: {
               model: models.Account
             },
-          }).catch((e) => responseStatusOfUnknownError(res, e));
+            raw : true ,
+            nest : true
+          }).catch(e => responseStatusOfUnknownError(res, e));
 
-          if(!status){
-            responseStatusCode(res, statusMessages.dataNotFound, 404)
-          }else{
-            responseSuccessfully(res, {status});
+          let statuses_children = await models.Status.findAll({
+            where: {reply: id},
+            include: {
+              model: models.Account
+            },
+            raw : true,
+            nest : true
+          }).catch(e => responseStatusOfUnknownError(res, e));
+
+          status_current.likes = await models.Like.count({where:{to:id}}).catch(e => responseStatusOfUnknownError(res, e));
+          status_current.boosts = await models.Status.count({where:{boost:id}}).catch(e => responseStatusOfUnknownError(res, e));
+          status_current.replies = await models.Status.count({where:{reply:id}}).catch(e => responseStatusOfUnknownError(res, e));
+
+          let statuses_children_ex = _.cloneDeep(statuses_children);
+
+          statuses_children_ex = await Promise.all(statuses_children.map(async (status)=>{
+            status.likes = await models.Like.count({where:{to:status.id}}).catch(e => responseStatusOfUnknownError(res, e));
+            status.boosts = await models.Status.count({where:{boost:status.id}}).catch(e => responseStatusOfUnknownError(res, e));
+            status.replies = await models.Status.count({where:{reply:status.id}}).catch(e => responseStatusOfUnknownError(res, e));
+            return status;
+          }));
+
+          // parent
+          let status_parent = await models.Status.findOne({
+            where: {id: status_current.reply},
+            include: {
+              model: models.Account
+            },
+            raw : true,
+            nest : true
+          }).catch(e => responseStatusOfUnknownError(res, e));
+
+          if (status_parent){
+            status_parent.likes = await models.Like.count({where:{to:status_parent.id}}).catch(e => responseStatusOfUnknownError(res, e));
+            status_parent.boosts = await models.Status.count({where:{boost:status_parent.id}}).catch(e => responseStatusOfUnknownError(res, e));
+            status_parent.replies = await models.Status.count({where:{reply:status_parent.id}}).catch(e => responseStatusOfUnknownError(res, e));
           }
+
+          responseSuccessfully(res, {status:status_current, replies_statuses:statuses_children_ex, status_parent});
+
         }
+
       }
     } catch (e) {
-      console.error(e)
-      console.log('catched.');
+      console.log('catched');
     }
   });
 

@@ -16,6 +16,22 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'whose',
       targetKey : 'id'
     });
+    models.Status.hasMany(models.Status,{
+      foreignKey: "reply",
+      as: 'replies'
+    });
+    models.Status.belongsTo(models.Status,{
+      foreignKey: 'reply',
+      targetKey : 'id',
+    });
+    models.Status.hasMany(models.Status,{
+      foreignKey: "boost",
+      as: 'boosts'
+    });
+    models.Status.belongsTo(models.Status,{
+      foreignKey: 'boost',
+      targetKey : 'id',
+    });
   };
   return Status;
 };
