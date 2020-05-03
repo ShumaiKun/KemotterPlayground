@@ -435,61 +435,61 @@ const StatusAPI = (app) => {
 
       if (!param.id) {
         responseStatusCode(res, statusMessages.isUndefined('id'));
-      }else{
+      } else {
 
         const id = parseInt(param.id, 10);
-        if (isNaN(id)){
+        if (isNaN(id)) {
           responseStatusCode(res, statusMessages.isInvalid('id'));
-        }else{
+        } else {
 
           const status_current = await models.Status.findOne({
-            where: {id},
+            where: { id },
             include: {
               model: models.Account
             },
-            raw : true ,
-            nest : true
+            raw: true,
+            nest: true
           }).catch(e => responseStatusOfUnknownError(res, e));
 
           let statuses_children = await models.Status.findAll({
-            where: {reply: id},
+            where: { reply: id },
             include: {
               model: models.Account
             },
-            raw : true,
-            nest : true
+            raw: true,
+            nest: true
           }).catch(e => responseStatusOfUnknownError(res, e));
 
-          status_current.likes = await models.Like.count({where:{to:id}}).catch(e => responseStatusOfUnknownError(res, e));
-          status_current.boosts = await models.Status.count({where:{boost:id}}).catch(e => responseStatusOfUnknownError(res, e));
-          status_current.replies = await models.Status.count({where:{reply:id}}).catch(e => responseStatusOfUnknownError(res, e));
+          status_current.likes = await models.Like.count({ where: { to: id } }).catch(e => responseStatusOfUnknownError(res, e));
+          status_current.boosts = await models.Status.count({ where: { boost: id } }).catch(e => responseStatusOfUnknownError(res, e));
+          status_current.replies = await models.Status.count({ where: { reply: id } }).catch(e => responseStatusOfUnknownError(res, e));
 
           let statuses_children_ex = _.cloneDeep(statuses_children);
 
-          statuses_children_ex = await Promise.all(statuses_children.map(async (status)=>{
-            status.likes = await models.Like.count({where:{to:status.id}}).catch(e => responseStatusOfUnknownError(res, e));
-            status.boosts = await models.Status.count({where:{boost:status.id}}).catch(e => responseStatusOfUnknownError(res, e));
-            status.replies = await models.Status.count({where:{reply:status.id}}).catch(e => responseStatusOfUnknownError(res, e));
+          statuses_children_ex = await Promise.all(statuses_children.map(async (status) => {
+            status.likes = await models.Like.count({ where: { to: status.id } }).catch(e => responseStatusOfUnknownError(res, e));
+            status.boosts = await models.Status.count({ where: { boost: status.id } }).catch(e => responseStatusOfUnknownError(res, e));
+            status.replies = await models.Status.count({ where: { reply: status.id } }).catch(e => responseStatusOfUnknownError(res, e));
             return status;
           }));
 
           // parent
           let status_parent = await models.Status.findOne({
-            where: {id: status_current.reply},
+            where: { id: status_current.reply },
             include: {
               model: models.Account
             },
-            raw : true,
-            nest : true
+            raw: true,
+            nest: true
           }).catch(e => responseStatusOfUnknownError(res, e));
 
-          if (status_parent){
-            status_parent.likes = await models.Like.count({where:{to:status_parent.id}}).catch(e => responseStatusOfUnknownError(res, e));
-            status_parent.boosts = await models.Status.count({where:{boost:status_parent.id}}).catch(e => responseStatusOfUnknownError(res, e));
-            status_parent.replies = await models.Status.count({where:{reply:status_parent.id}}).catch(e => responseStatusOfUnknownError(res, e));
+          if (status_parent) {
+            status_parent.likes = await models.Like.count({ where: { to: status_parent.id } }).catch(e => responseStatusOfUnknownError(res, e));
+            status_parent.boosts = await models.Status.count({ where: { boost: status_parent.id } }).catch(e => responseStatusOfUnknownError(res, e));
+            status_parent.replies = await models.Status.count({ where: { reply: status_parent.id } }).catch(e => responseStatusOfUnknownError(res, e));
           }
 
-          responseSuccessfully(res, {status:status_current, replies_statuses:statuses_children_ex, status_parent});
+          responseSuccessfully(res, { status: status_current, replies_statuses: statuses_children_ex, status_parent });
 
         }
 
@@ -506,12 +506,12 @@ const StatusAPI = (app) => {
     try {
       const body = req.body;
       const author = await getAccountFromRequestHeader(res, req);
-      if (body.reply && body.boost){
+      if (body.reply && body.boost) {
         responseStatusCode(res, statusMessages.isInvalid('boost and reply'), 400);
-      }else{
-        if(body.text == "" || /^\s+$/g.test(body.text)){
+      } else {
+        if (body.text == "" || /^\s+$/g.test(body.text)) {
           responseStatusCode(res, statusMessages.isInvalid('text'), 400);
-        }else{
+        } else {
           const result = await models.Status.create({
             whose: author.id,
             text: body.text,
