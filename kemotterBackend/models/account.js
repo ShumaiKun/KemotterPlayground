@@ -60,6 +60,12 @@ module.exports = (sequelize, DataTypes) => {
       as: 'followers',
       foreignKey: "to"
     });
+    models.Account.hasMany(models.Status,{
+      foreignKey: "whose"
+    });
+    models.Account.hasMany(models.Like,{
+      foreignKey: "who"
+    });
   };
   return Account;
 };

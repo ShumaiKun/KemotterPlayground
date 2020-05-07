@@ -7,6 +7,7 @@ const models = require('./models');
 const _ = require('lodash');
 const errors = require('./errors.js');
 const statusMessages = require('./statusmessages.js');
+const { Op } = require("sequelize");
 
 
 app.use(bodyParser.urlencoded({ extended: true })) // for parsing application/x-www-form-urlencoded
@@ -42,6 +43,7 @@ app.get('/', (req, res) => {
  * @param {Error} e
  */
 const responseStatusOfUnknownError = (res, e = undefined) => {
+  console.error(e);
   responseStatusCode(res, 'unknown error. check the request.', 400);
 }
 
@@ -416,8 +418,118 @@ const FollowAPI = (app) => {
 //* DELETE
 app.delete('/follow', (req, res) => responseStatusCode(res, 'Not Found.', 404));
 
+
+
+/**
+ * StatusAPI
+ */
+const StatusAPI = (app) => {
+
+  /**
+   * Status API (GET)
+   */
+  app.get('/status', async (req, res) => {
+    try {
+
+      const param = req.query;
+
+      if (!param.id) {
+        responseStatusCode(res, statusMessages.isUndefined('id'));
+      } else {
+
+        const id = parseInt(param.id, 10);
+        if (isNaN(id)) {
+          responseStatusCode(res, statusMessages.isInvalid('id'));
+        } else {
+
+          const status_current = await models.Status.findOne({
+            where: { id },
+            include: {
+              model: models.Account
+            },
+            raw: true,
+            nest: true
+          }).catch(e => responseStatusOfUnknownError(res, e));
+
+          let statuses_children = await models.Status.findAll({
+            where: { reply: id },
+            include: {
+              model: models.Account
+            },
+            raw: true,
+            nest: true
+          }).catch(e => responseStatusOfUnknownError(res, e));
+
+          status_current.likes = await models.Like.count({ where: { to: id } }).catch(e => responseStatusOfUnknownError(res, e));
+          status_current.boosts = await models.Status.count({ where: { boost: id } }).catch(e => responseStatusOfUnknownError(res, e));
+          status_current.replies = await models.Status.count({ where: { reply: id } }).catch(e => responseStatusOfUnknownError(res, e));
+
+          let statuses_children_ex = _.cloneDeep(statuses_children);
+
+          statuses_children_ex = await Promise.all(statuses_children.map(async (status) => {
+            status.likes = await models.Like.count({ where: { to: status.id } }).catch(e => responseStatusOfUnknownError(res, e));
+            status.boosts = await models.Status.count({ where: { boost: status.id } }).catch(e => responseStatusOfUnknownError(res, e));
+            status.replies = await models.Status.count({ where: { reply: status.id } }).catch(e => responseStatusOfUnknownError(res, e));
+            return status;
+          }));
+
+          // parent
+          let status_parent = await models.Status.findOne({
+            where: { id: status_current.reply },
+            include: {
+              model: models.Account
+            },
+            raw: true,
+            nest: true
+          }).catch(e => responseStatusOfUnknownError(res, e));
+
+          if (status_parent) {
+            status_parent.likes = await models.Like.count({ where: { to: status_parent.id } }).catch(e => responseStatusOfUnknownError(res, e));
+            status_parent.boosts = await models.Status.count({ where: { boost: status_parent.id } }).catch(e => responseStatusOfUnknownError(res, e));
+            status_parent.replies = await models.Status.count({ where: { reply: status_parent.id } }).catch(e => responseStatusOfUnknownError(res, e));
+          }
+
+          responseSuccessfully(res, { status: status_current, replies_statuses: statuses_children_ex, status_parent });
+
+        }
+
+      }
+    } catch (e) {
+      console.log('catched');
+    }
+  });
+
+  /**
+   * Status API (POST)
+   */
+  app.post('/status', async (req, res) => {
+    try {
+      const body = req.body;
+      const author = await getAccountFromRequestHeader(res, req);
+      if (body.reply && body.boost) {
+        responseStatusCode(res, statusMessages.isInvalid('boost and reply'), 400);
+      } else {
+        if (body.text == "" || /^\s+$/g.test(body.text)) {
+          responseStatusCode(res, statusMessages.isInvalid('text'), 400);
+        } else {
+          const result = await models.Status.create({
+            whose: author.id,
+            text: body.text,
+            reply: body.reply ? body.reply : null,
+            boost: body.boost ? body.boost : null
+          }).catch(e => responseStatusOfUnknownError(res, e));
+          responseSuccessfully(res, result);
+        }
+      }
+    } catch (e) {
+      console.log('catched.');
+    }
+  });
+}
+
 AccountAPI(app);
 FollowAPI(app);
+StatusAPI(app);
 
 
 http.listen(PORT, () => {
